@@ -15,13 +15,16 @@ from libc.math cimport sqrt
 cimport numpy as cnp
 cimport cython
 
+from scipy.misc import imsave
+import matplotlib.pyplot as plt
+import os
+import tempfile
 
 ctypedef cnp.int32_t DTYPE_INT32_t
 ctypedef cnp.int8_t DTYPE_BOOL_t
 
 
 include "heap_watershed.pxi"
-
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
@@ -130,6 +133,12 @@ def watershed_raveled(cnp.float64_t[::1] image,
 
     cdef Heap *hp = <Heap *> heap_from_numpy2()
 
+    anim_folder = os.environ.get('ANIM_FOLDER', tempfile.mkdtemp(prefix='anim_'))
+    if not os.path.exists(anim_folder):
+        os.makedirs(anim_folder)
+
+    cdef int anim_count = 0
+    cdef int anim_count_step = 0
     with nogil:
         for i in range(marker_locations.shape[0]):
             index = marker_locations[i]
@@ -141,6 +150,12 @@ def watershed_raveled(cnp.float64_t[::1] image,
 
         while hp.items > 0:
             heappop(hp, &elem)
+
+            with gil:
+                if anim_count % 1000 == 0:
+                    plt.imsave(os.path.join(anim_folder, 'slice_%07d.png' % anim_count_step), np.asarray(output).reshape(514, 514))
+                    anim_count_step += 1
+            anim_count += 1
 
             if compact or wsl:
                 # in the compact case, we need to label pixels as they come off
@@ -194,4 +209,5 @@ def watershed_raveled(cnp.float64_t[::1] image,
 
                 heappush(hp, &new_elem)
 
+    print('written all images to', anim_folder)
     heap_done(hp)
